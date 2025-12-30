@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-Time EMI Calculator</title>
+    <style>
+        :root {
+            --primary: #6366f1;
+            --secondary: #a855f7;
+            --text-main: #f8fafc;
+            --text-dim: #94a3b8;
+            --bg: #0f172a;
+            --error: #ef4444;
+        }
+
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background-color: var(--bg);
+            color: var(--text-main);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .card {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 2.5rem;
+            border-radius: 24px;
+            width: 100%;
+            max-width: 400px;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3);
+        }
+
+        h2 { margin-top: 0; font-weight: 600; text-align: center; background: linear-gradient(to right, #818cf8, #c084fc); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+
+        .input-box { margin-bottom: 1.5rem; position: relative; }
+
+        label { display: block; margin-bottom: 8px; font-size: 0.85rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; }
+
+        input {
+            width: 100%;
+            padding: 12px 16px;
+            background: rgba(15, 23, 42, 0.6);
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            color: white;
+            font-size: 1.1rem;
+            box-sizing: border-box;
+            transition: all 0.2s ease;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.2);
+        }
+
+        /* Hide arrows for Chrome, Safari, Edge, Opera */
+        input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+
+        .result-container {
+            background: rgba(99, 102, 241, 0.1);
+            border-radius: 16px;
+            padding: 1.5rem;
+            text-align: center;
+            margin-top: 2rem;
+            border: 1px dashed rgba(99, 102, 241, 0.3);
+        }
+
+        .emi-label { font-size: 0.9rem; color: var(--text-dim); }
+        .emi-value { font-size: 2.2rem; font-weight: 800; color: #fff; margin: 5px 0; }
+        .error-msg { color: var(--error); font-size: 0.8rem; margin-top: 5px; display: none; }
+
+        .stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 15px;
+            font-size: 0.8rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            padding-top: 15px;
+        }
+        
+        .stat-item span { display: block; color: var(--text-dim); }
+        .stat-item b { color: var(--text-main); }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <h2>EMI Calculator</h2>
+    
+    <div class="input-box">
+        <label>Principal Amount</label>
+        <input type="number" id="p" placeholder="0" min="1">
+        <div id="p-err" class="error-msg">Please enter a valid amount</div>
+    </div>
+
+    <div class="input-box">
+        <label>Annual Interest (%)</label>
+        <input type="number" id="r" placeholder="0" step="0.01" min="0.1">
+        <div id="r-err" class="error-msg">Rate must be greater than 0</div>
+    </div>
+
+    <div class="input-box">
+        <label>Tenure (Months)</label>
+        <input type="number" id="n" placeholder="0" min="1">
+        <div id="n-err" class="error-msg">Tenure must be at least 1 month</div>
+    </div>
+
+    <div class="result-container">
+        <div class="emi-label">Monthly Payment</div>
+        <div class="emi-value" id="out-emi">$0.00</div>
+        
+        <div class="stats">
+            <div class="stat-item">
+                <span>Total Interest</span>
+                <b id="out-int">$0</b>
+            </div>
+            <div class="stat-item">
+                <span>Total Payback</span>
+                <b id="out-total">$0</b>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const inputs = ['p', 'r', 'n'];
+    
+    // Add event listeners to all inputs
+    inputs.forEach(id => {
+        document.getElementById(id).addEventListener('input', calculate);
+    });
+
+    function calculate() {
+        const P = parseFloat(document.getElementById('p').value);
+        const annualR = parseFloat(document.getElementById('r').value);
+        const N = parseFloat(document.getElementById('n').value);
+
+        let isValid = true;
+
+        // Validation Logic
+        if (P <= 0 || isNaN(P)) { toggleErr('p', true); isValid = false; } else { toggleErr('p', false); }
+        if (annualR <= 0 || isNaN(annualR)) { toggleErr('r', true); isValid = false; } else { toggleErr('r', false); }
+        if (N <= 0 || isNaN(N) || !Number.isInteger(N)) { toggleErr('n', true); isValid = false; } else { toggleErr('n', false); }
+
+        if (!isValid) {
+            resetResults();
+            return;
+        }
+
+        // Calculation
+        const monthlyR = (annualR / 12) / 100;
+        const emi = (P * monthlyR * Math.pow(1 + monthlyR, N)) / (Math.pow(1 + monthlyR, N) - 1);
+        
+        const totalPayable = emi * N;
+        const totalInterest = totalPayable - P;
+
+        // UI Update
+        document.getElementById('out-emi').innerText = formatCurr(emi);
+        document.getElementById('out-int').innerText = formatCurr(totalInterest);
+        document.getElementById('out-total').innerText = formatCurr(totalPayable);
+    }
+
+    function toggleErr(id, show) {
+        document.getElementById(id + '-err').style.display = show ? 'block' : 'none';
+        document.getElementById(id).style.borderColor = show ? 'var(--error)' : '';
+    }
+
+    function resetResults() {
+        document.getElementById('out-emi').innerText = "$0.00";
+        document.getElementById('out-int').innerText = "$0";
+        document.getElementById('out-total').innerText = "$0";
+    }
+
+    function formatCurr(num) {
+        return "$" + num.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    }
+</script>
+
+</body>
+</html>
+
